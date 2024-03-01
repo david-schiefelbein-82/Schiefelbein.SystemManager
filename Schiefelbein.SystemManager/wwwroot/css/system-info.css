@@ -1,0 +1,31 @@
+﻿
+/*
+.cpu-core-chart {
+    width: 150px !important;
+    height: 150px !important;
+}
+.memory-chart {
+    width: 300px !important;
+    height: 400px !important;
+}*/
+
+.cpu-core-chart-container {
+    position: relative;
+    width: 150px !important;
+    height: 150px !important;
+}
+
+.memory-chart-container {
+    position: relative;
+    width: 300px !important;
+    height: 200px !important;
+}
+
+.cpu-core-row {
+    /*    border: 1px solid grey;
+    border-radius: 10px;
+    max-width: 620px;
+    text-align: center;*/
+}
+
+

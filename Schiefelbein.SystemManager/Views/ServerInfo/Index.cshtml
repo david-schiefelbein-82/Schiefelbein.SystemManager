@@ -1,0 +1,117 @@
+﻿@model Schiefelbein.SystemManager.Models.ServerInfoViewModel
+@{
+    ViewData["Title"] = "System Manager";
+}
+
+@section Css {
+    <link rel="stylesheet" href="~/css/fm-dialog.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/system-info.css" asp-append-version="true" />
+}
+
+<div id="liveAlerts" class="live-alerts"></div>
+<div class="bg-light">
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+        <div class="container-fluid">
+            <a class="navbar-brand"><span class="server-name">@Model.ServerName</span></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+                <div class="navbar-nav">
+                    @for (var i = 0; i < Model.Servers.Length; ++i)
+                    {
+                        @if (string.Equals(Model.Servers[i], Model.ServerName, StringComparison.CurrentCultureIgnoreCase))
+                        {
+                            <a class="nav-link active" aria-current="page" href="@Url.Action("Index", "ServerInfo", new { serverName = Model.Servers[i] })"><span class="server-link-active">@Model.Servers[i]</span></a>
+                        }
+                        else
+                        {
+                            <a class="nav-link" href="@Url.Action("Index", "ServerInfo", new { serverName = Model.Servers[i] })"><span class="server-link-inactive">@Model.Servers[i]</span></a>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div id="error-message-div" class="alert alert-danger" style="display: none;" role="alert">
+    </div>
+
+    <div class="shadow-lg p-3 mb-5 bg-body-tertiary rounded">
+        <div class="container-fluid">
+            <div class="card mx-auto">
+                @*                <div class="row">
+                <div class="col chart-col">
+                <canvas id="cpu-total-chart" class="cpu-total-chart"></canvas>
+                </div>
+                </div>*@
+                <div class="row text-center"><h2>CPU</h2></div>
+                <div class="row cpu-core-row gx-0 px-0">
+                    @for (int i = 0; i < Model.CpuCores; i += 4)
+                    {
+                        @for (int j = i; j < (i + 4) && j < Model.CpuCores; j++)
+                        {
+                            <div class="col cpu-core-col cpu-@j-col col-md-auto p-0 ">
+                                <div class="cpu-core-chart-container">
+                                    <canvas id="cpu-@j-chart" class="cpu-core-chart cpu-@j-chart"></canvas>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="shadow-lg p-3 mb-5 bg-body-tertiary rounded">
+        <div class="container-fluid">
+            <div class="card mx-auto">
+                <div class="row text-center"><h2>Memory</h2></div>
+                <div class="row memory-row gx-0 px-0">
+                    <div class="col memory-col memory-col col-md-auto p-0">
+                        <div class="memory-chart-container">
+                            <canvas id="memory-chart" class="memory-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts{
+    <script src="~/js/alerts.js" asp-append-version="true"></script>
+    <script src="~/lib/chart.js/chart.umd.js"></script>
+    <script src="~/js/server-info.js"></script>
+
+    <script>
+        var cpuCoreCount = @Model.CpuCores;
+        var systemInfo;
+        var serverName = "@Model.ServerName";
+
+        var urlSystemInfo = "@Url.Action("Index", "SystemInfo", new { serverName = @Model.ServerName })";
+        systemInfo = createSystemInfo(urlSystemInfo);
+
+        $(document).ready(function () {
+            for (var i = 0; i < cpuCoreCount; ++i) {
+                systemInfo.createCpuCoreGraph('cpu-' + i + '-chart', i);
+            }
+
+            systemInfo.createMemoryGraph('memory-chart', 'memory');
+            systemInfo.init(cpuCoreCount, 'cpu-$i-chart', 'memory-chart', function (success, errorMessage) {
+            });
+            refreshSoon();
+        });
+
+        function refreshSoon() {
+            setTimeout(function () {
+                systemInfo.refresh(function (success, errorMessage) {
+                    if (!success) {
+                        $("#error-message-div").html(errorMessage);
+                        $("#error-message-div").show();
+                    }
+                    refreshSoon();
+                });
+            }, 1000);
+        }
+    </script>
+}

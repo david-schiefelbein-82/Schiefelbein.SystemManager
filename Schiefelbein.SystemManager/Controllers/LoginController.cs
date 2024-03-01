@@ -1,0 +1,272 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Schiefelbein.Common.Web;
+using Schiefelbein.Common.Web.ActiveDirectory;
+using Schiefelbein.Common.Web.Oidc;
+using Schiefelbein.SystemManager.Configuration;
+using Schiefelbein.SystemManager.Data;
+using System.Data;
+using System.IdentityModel.Tokens.Jwt;
+using System.Text;
+
+namespace Schiefelbein.SystemManager.Controllers
+{
+    [AllowAnonymous]
+    public class LoginController : Controller
+    {
+        private readonly ILogger<LoginController> _logger;
+        private readonly IOidcClient _oidcClient;
+        private readonly IConfigManager _configManager;
+        private readonly IJwtSecurityTokenProvider _jwtSecurityTokenProvider;
+        private readonly IActiveDirectoryUserAuthenticator _activeDirectoryUserAuthenticator;
+
+        public static string PageToController(string? page)
+        {
+            if (string.Equals(page, "Services", StringComparison.CurrentCultureIgnoreCase))
+                return "Services";
+
+            if (string.Equals(page, "Admin", StringComparison.CurrentCultureIgnoreCase))
+                return "Admin";
+
+            return "ServerInfo";
+        }
+
+        public LoginController(ILogger<LoginController> logger, IOidcClient oidcClient, IConfigManager configManager, IJwtSecurityTokenProvider jwtSecurityTokenProvider, IActiveDirectoryUserAuthenticator activeDirectoryUserAuthenticator)
+        {
+            _logger = logger;
+            _oidcClient = oidcClient;
+            _configManager = configManager;
+            _jwtSecurityTokenProvider = jwtSecurityTokenProvider;
+            _activeDirectoryUserAuthenticator = activeDirectoryUserAuthenticator;
+        }
+
+        public IActionResult Index(string? page)
+        {
+            return View();
+        }
+
+        [HttpPost("[controller]/signin-ad")]
+        public ActionResult SigninAd(string? page, string username, string password)
+        {
+            if (_configManager.WebServer.LoginMethod != WebServerLoginType.ActiveDirectory &&
+                _configManager.WebServer.LoginMethod != WebServerLoginType.OidcAndActiveDirectory)
+                return RedirectToAction("Index", "Home", new { error = "Login with crentials not supported" });
+
+            try
+            {
+                var user = _activeDirectoryUserAuthenticator.Login(username, password);
+                _logger.LogInformation("Login-AD success, {user}", user);
+                CreateAuthenticationToken(user);
+
+                return RedirectToAction("Index", PageToController(page));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Login-AD user: {user}", username);
+                return RedirectToAction("Index", "Home", new { error = ex.Message, page = page });
+            }
+        }
+
+        [HttpGet("[controller]/signout")]
+        public ActionResult Signout()
+        {
+            this.ClearAuthenticationToken();
+            return RedirectToAction("Index", "Home");
+        }
+
+        [HttpGet("signin-oidc")]
+        public async Task<ActionResult> SigninOidcGet(
+            [FromQuery(Name = "error")] string? error,
+            [FromQuery(Name = "error_description")] string? errorDescription,
+            [FromQuery(Name = "state")] string? state,
+            [FromQuery(Name = "code")] string? code,
+            [FromQuery(Name = "id_token")] string? idToken,
+            [FromQuery(Name = "access_token")] string? accessToken)
+        {
+            _logger.LogInformation("signin-oidc callback (GET) {sid} state: {state}", HttpContext.Session.Id, state);
+
+            if (_configManager.WebServer.LoginMethod != WebServerLoginType.OIDC &&
+                _configManager.WebServer.LoginMethod != WebServerLoginType.OidcAndActiveDirectory)
+                return RedirectToAction("Index", "Home", new { error = "Login with OIDC not supported" });
+
+            if (!string.IsNullOrEmpty(error))
+            {
+                _logger.LogError("callback {error}: {errorDescription}", error, errorDescription);
+                return RedirectToAction("Index", "Home", new { error = string.Format("{0}: {1}", error, errorDescription) });
+            }
+
+            if (string.IsNullOrEmpty(code) && string.IsNullOrEmpty(idToken) && string.IsNullOrEmpty(accessToken))
+            {
+                _logger.LogWarning("no id_token, token or code supplied to callback {request}", Print(Request));
+                return RedirectToAction("Index", "Home", new { error = string.Format("no id_token, token or code supplied to callback") });
+            }
+
+            try
+            {
+                await Login(state, code, idToken, accessToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "GET callback {sid}", HttpContext.Session.Id);
+                return RedirectToAction("Index", "Home", new { error = ex.Message });
+            }
+
+            return RedirectToAction("Index", "ServerInfo");
+        }
+
+        [HttpPost("signin-oidc")]
+        public async Task<ActionResult> SigninOidcPost(IFormCollection formCollection)
+        {
+            string? error = formCollection["error"];
+            string? errorDescription = formCollection["error_description"];
+            string? state = formCollection["state"];
+            string? code = formCollection["code"];
+            string? idToken = formCollection["id_token"];
+            string? accessToken = formCollection["access_token"];
+
+            _logger.LogInformation("signin-oidc callback (POST) {sid} state: {state}", HttpContext.Session.Id, state);
+
+            if (_configManager.WebServer.LoginMethod != WebServerLoginType.OIDC &&
+                _configManager.WebServer.LoginMethod != WebServerLoginType.OidcAndActiveDirectory)
+                return RedirectToAction("Index", "Home", new { error = "Login with OIDC not supported" });
+
+            if (!string.IsNullOrEmpty(error))
+            {
+                _logger.LogError("POST callback {error}: {errorDescription}", error, errorDescription);
+                return RedirectToAction("Index", "Home", new { error = string.Format("{0}: {1}", error, errorDescription) });
+            }
+
+            if (string.IsNullOrEmpty(code) && string.IsNullOrEmpty(idToken) && string.IsNullOrEmpty(accessToken))
+            {
+                return RedirectToAction("Index", "Home", new { error = string.Format("no id_token, token or code supplied to callback") });
+            }
+
+            try
+            {
+                await Login(state, code, idToken, accessToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "POST /callback/ {sid}", HttpContext.Session.Id);
+                return RedirectToAction("Index", "Home", new { error = ex.Message });
+            }
+
+            return RedirectToAction("Index", "ServerInfo");
+        }
+
+        private static string Print(HttpRequest request)
+        {
+            var sb = new StringBuilder();
+            sb.AppendFormat("{0} {1} {2}", request.Method, request.Path, request.QueryString);
+            foreach (var header in request.Headers)
+            {
+                sb.AppendFormat("{0}: {1}", header.Key, header.Value);
+            }
+
+            return sb.ToString();
+        }
+
+        public void CreateAuthenticationToken(OidcJwtToken idToken)
+        {
+            var token = _jwtSecurityTokenProvider.CreateAuthenticationToken(idToken);
+            _logger.LogInformation("OIDC User Login {claims}", PrintClaims(token));
+            HttpContext.Session.SetString("jwtToken", _jwtSecurityTokenProvider.WriteToken(token));
+        }
+
+        public void CreateAuthenticationToken(ActiveDirectoryUser user)
+        {
+            var token = _jwtSecurityTokenProvider.CreateAuthenticationToken(user);
+            _logger.LogInformation("AD User Login {claims}", PrintClaims(token));
+            HttpContext.Session.SetString("jwtToken", _jwtSecurityTokenProvider.WriteToken(token));
+        }
+
+        public void ClearAuthenticationToken()
+        {
+            HttpContext.Session.Remove("jwtToken");
+        }
+
+        /// <summary>
+        /// Login with either a code or id_token
+        /// </summary>
+        /// <param name="state">I use the state to encode the sessionId</param>
+        /// <param name="code">the code returned by the authentication attempt</param>
+        /// <param name="idToken">the id_token returned by the authentication attempt</param>
+        /// <param name="accessToken">the access_token returned by the authentication attempt</param>
+        /// <returns>Once the user is logged in.  Throws an exeption otherwise</returns>
+        private async Task Login(string? state, string? code, string? idToken, string? accessToken)
+        {
+            if (state == null)
+                return;
+
+            var sessionId = state ?? "unknown";
+
+            _logger.LogDebug("Login postback for session {sid}", sessionId);
+
+            if (code != null)
+            {
+                await LoginWithCode(_oidcClient, code);
+            }
+            else
+            {
+                await LoginWithIdToken(_oidcClient, idToken, accessToken);
+            }
+        }
+
+        /// <summary>
+        /// login with an id-token
+        /// </summary>
+        /// <param name="idTokenStr"></param>
+        /// <param name="accessTokenStr"></param>
+        private async Task LoginWithIdToken(IOidcClient client, string? idTokenStr, string? accessTokenStr)
+        {
+            OidcJwtToken? idToken = null;
+            OidcJwtToken? accessToken = null;
+
+            if (idTokenStr != null)
+                _ = OidcJwtToken.TryParse(idTokenStr, out idToken);
+
+            if (accessTokenStr != null)
+                _ = OidcJwtToken.TryParse(accessTokenStr, out accessToken);
+
+            if (idToken != null)
+            {
+                // validation throws an exception if it fails
+                await client.ValidateJwt(idToken);
+                _logger.LogInformation("id_token is valid (signature has been verified)");
+
+                CreateAuthenticationToken(idToken);
+            }
+        }
+
+        private async Task LoginWithCode(IOidcClient client, string code)
+        {
+            // if we have a code, then we call a rest api to get the tokens from it
+            try
+            {
+                var codeToken = await client.GetToken(code);
+                _ = OidcJwtToken.TryParse(codeToken.IdTokenBase64 ?? string.Empty, out OidcJwtToken? idToken);
+
+                if (idToken != null)
+                {
+                    // validation throws an exception if it fails
+                    await client.ValidateJwt(idToken);
+                    _logger.LogInformation("id_token is valid (signature has been verified)");
+
+                    CreateAuthenticationToken(idToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "LoginWithCode");
+                throw;
+            }
+        }
+
+        private string PrintClaims(JwtSecurityToken token)
+        {
+            return string.Join(", ", from x
+                                     in token.Claims
+                                     select x.Type + " = " + x.Value);
+        }
+    }
+}

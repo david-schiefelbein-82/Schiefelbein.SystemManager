@@ -1,0 +1,269 @@
+﻿@model ServicesViewModel
+@functions {
+    public string RenderStyle(bool visible)
+    {
+        return visible ? "" : "display: none;";
+    }
+}
+@section Css {
+    <link rel="stylesheet" href="~/css/services.css" asp-append-version="true" />
+}
+
+<div id="liveAlerts" class="live-alerts"></div>
+
+<div class="container-controls">
+    <button type="button" id="btn-refresh" class="btn btn-secondary">Refresh</button>
+</div>
+
+<nav class="navbar navbar-expand-lg bg-body-tertiary">
+    <div class="container-fluid">
+        <a class="navbar-brand"><span class="server-name">@Model.ServerName</span></a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+            <div class="navbar-nav">
+                @for (var i = 0; i < Model.Servers.Length; ++i)
+                {
+                    @if (string.Equals(Model.Servers[i], Model.ServerName, StringComparison.CurrentCultureIgnoreCase))
+                    {
+                        <a class="nav-link active" aria-current="page" href="@Url.Action("Index", "Services", new { serverName = Model.Servers[i] })"><span class="server-link-active">@Model.Servers[i]</span></a>
+                    }
+                    else
+                    {
+                        <a class="nav-link" href="@Url.Action("Index", "Services", new { serverName = Model.Servers[i] })"><span class="server-link-inactive">@Model.Servers[i]</span></a>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</nav>
+
+@if (!Model.IsSuccess)
+{
+    <div id="error-message-div" class="alert alert-danger" role="alert">
+        @Model.Error
+    </div>
+}
+
+<div class="album py-1 bg-body-tertiary">
+    <div class="container mr-0 mr-md-2 p-0 p-md-2">
+        <div class="row row-cols-1 g-0">
+            @foreach (var svc in Model.Services)
+            {
+                <div class="row file-card border-bottom px-0 service-container" data-svc-id="svc.Id">
+                    <div class="col col-2">
+                        <div class="btn-favourite-container" style="@RenderStyle(!svc.IsFavourite)">
+                            <button type="button" class="btn btn-link btn-sm btn-favourite" data-svc-id="@svc.Id" onclick='return smFavourite(this, @Json.Serialize(svc.Name), true)'>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-star btn-image" viewBox="0 0 16 16">
+                                    <path d="M2.866 14.85c-.078.444.36.791.746.593l4.39-2.256 4.389 2.256c.386.198.824-.149.746-.592l-.83-4.73 3.522-3.356c.33-.314.16-.888-.282-.95l-4.898-.696L8.465.792a.513.513 0 0 0-.927 0L5.354 5.12l-4.898.696c-.441.062-.612.636-.283.95l3.523 3.356-.83 4.73zm4.905-2.767-3.686 1.894.694-3.957a.56.56 0 0 0-.163-.505L1.71 6.745l4.052-.576a.53.53 0 0 0 .393-.288L8 2.223l1.847 3.658a.53.53 0 0 0 .393.288l4.052.575-2.906 2.77a.56.56 0 0 0-.163.506l.694 3.957-3.686-1.894a.5.5 0 0 0-.461 0z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="btn-unfavourite-container" style="@RenderStyle(svc.IsFavourite)">
+                            <button type="button" class="btn btn-link btn-sm btn-unfavourite" data-svc-id="@svc.Id" onclick='return smFavourite(this, @Json.Serialize(svc.Name), false)'>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-star-fill btn-image" viewBox="0 0 16 16">
+                                    <path d="M3.612 15.443c-.386.198-.824-.149-.746-.592l.83-4.73L.173 6.765c-.329-.314-.158-.888.283-.95l4.898-.696L7.538.792c.197-.39.73-.39.927 0l2.184 4.327 4.898.696c.441.062.612.636.282.95l-3.522 3.356.83 4.73c.078.443-.36.79-.746.592L8 13.187l-4.389 2.256z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col col-10">
+                        <span class="file-label file-list-label">@svc.DisplayName</span>
+                    </div>
+                    <div class="col col-2"></div>
+                    <div class="col col-5 text-start">
+                        <span class="text-muted file-list-modified">@svc.StartMode</span>
+                    </div>
+                    <div class="col col-5 text-end file-list-size">
+                        <div class="dropdown">
+                            <button class="btn btn-secondary btn-sm dropdown-toggle btn-@svc.Id" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                @svc.Status
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item mi-@svc.Id-start" href="#" onclick='return smStartService("@svc.Name")'>Start</a></li>
+                                <li><a class="dropdown-item mi-@svc.Id-stop" href="#" onclick='return smStopService("@svc.Name")'>Stop</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            }
+
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/alerts.js" asp-append-version="true"></script>
+    <script src="~/js/services.js" asp-append-version="true"></script>
+
+    <script>
+
+        var serverName = @Json.Serialize(Model.ServerName);
+
+        function showError(jqXHR, operation) {
+            var error = null;
+            if (typeof jqXHR.responseText == 'string')
+                error = jqXHR.responseText;
+
+            if (error == null || error.length == 0) {
+                if (jqXHR.status == 400)
+                    error = jqXHR.status + " Bad Request";
+                else if (jqXHR.status == 401)
+                    error = jqXHR.status + " Unauthorized";
+                else if (jqXHR.status == 403)
+                    error = jqXHR.status + " Forbidden";
+                else if (jqXHR.status == 404)
+                    error = jqXHR.status + " Not Found";
+                else if (jqXHR.status == 405)
+                    error = jqXHR.status + " Method Not Allowed";
+                else
+                    error = jqXHR.status;
+            }
+
+            showAlert("danger", error);
+        }
+
+        var sm = createServiceManager({
+            'start-url': '@Url.Action("Start", "Services")',
+            'stop-url': '@Url.Action("Stop", "Services")',
+            'refresh-url': '@Url.Action("Refresh", "Services", new { serverName = Model.ServerName })',
+            'favourite-url': '@Url.Action("Favourite", "Services")',
+            'wait-for-status-url': '@Url.Action("WaitForStatus", "Services")'
+        });
+
+        function smStartService(serviceName) {
+            sm.startService(serverName, serviceName)
+                .then((result) => {
+                    var success = result.success;
+                    var error = result.error;
+                    if (success) {
+                        showAlert("success", "starting service " + serviceName);
+                        smWaitForServiceStatus(serviceName, ["Running"]);
+                    }
+                    else
+                        showAlert("danger", "cannot start service " + serviceName + " - " + error);
+                })
+                .catch(function (jqXHR, textStatus, errorThrown) {
+                    showError(jqXHR, "start service");
+                });
+
+            return false;
+        }
+
+        function smStopService(serviceName) {
+            sm.stopService(serverName, serviceName)
+                .then((result) => {
+                    var success = result.success;
+                    var error = result.error;
+                    if (success) {
+                        showAlert("success", "stopping service " + serviceName);
+                        smWaitForServiceStatus(serviceName, ["Stopped"]);
+                    }
+                    else
+                        showAlert("danger", "cannot stop service " + serviceName + " - " + error);
+                })
+                .catch(function (jqXHR, textStatus, errorThrown) {
+                    showError(jqXHR, "stop service");
+                });
+
+            return false;
+        }
+
+        function smFavourite(elem, serviceName, isFavourite) {
+            sm.favourite(serverName, serviceName, isFavourite)
+                .then((result) => {
+                    var success = result.success;
+                    var error = result.error;
+                    if (success)
+                        showAlert("success", serviceName + " is now a " + (isFavourite ? "favourite" : "non favourite"));
+                    else
+                        showAlert("danger", "cannot change favourite for service " + serviceName + " - " + error);
+                })
+                .catch(function (jqXHR, textStatus, errorThrown) {
+                    showError(jqXHR, "favourite");
+                });
+
+            var root = $(elem).closest('.service-container');
+            if (isFavourite) {
+                root.find(".btn-favourite-container").hide();
+                root.find(".btn-unfavourite-container").show();
+            } else {
+                root.find(".btn-favourite-container").show();
+                root.find(".btn-unfavourite-container").hide();
+            }
+
+            return false;
+        }
+
+        function smWaitForServiceStatus(serviceName, statusList) {
+            sm.waitForServiceStatus(serverName, serviceName, statusList, 5000)
+                .then((result) => {
+                    var success = result.success;
+                    var error = result.error;
+                    if (success)
+                        updateService(result.id, result.name, result.status);
+                    else
+                        updateService(result.id, result.name, result.status);
+                })
+                .catch(function (jqXHR, textStatus, errorThrown) {
+                    showError(jqXHR, "smWaitForServiceStatus");
+                });
+
+            return false;
+        }
+
+        function updateService(id, name, status) {
+            $(".btn-" + id).html(status + " ");
+
+            $(".btn-" + id).removeClass("btn-success");
+            $(".btn-" + id).removeClass("btn-primary");
+            $(".btn-" + id).removeClass("btn-secondary");
+
+            if (status == "Stopped") {
+                $(".btn-" + id).addClass("btn-secondary");
+                $(".mi-" + id + "-stop").addClass("disabled");
+                $(".mi-" + id + "-start").removeClass("disabled");
+            } else if (status == "Running") {
+                $(".btn-" + id).addClass("btn-success");
+                $(".mi-" + id + "-stop").removeClass("disabled");
+                $(".mi-" + id + "-start").addClass("disabled");
+            } else {
+                $(".btn-" + id).addClass("btn-secondary");
+                $(".mi-" + id + "-stop").addClass("disabled");
+                $(".mi-" + id + "-start").addClass("disabled");
+            }
+        }
+
+        function fmServiceRefresh() {
+            sm.refresh()
+                .then((result) => {
+                    var serviceList = result.services;
+                    for (var i = 0; i < serviceList.length; ++i) {
+                        var id = serviceList[i].id;
+                        var name = serviceList[i].name;
+                        var status = serviceList[i].status;
+                        updateService(id, name, status);
+                    }
+                });
+        }
+
+        $(document).ready(function () {
+            $("#btn-refresh").on("click", function () {
+                fmServiceRefresh();
+            });
+
+            $(".btn-favourite").on("click", function () {
+                var serviceId = $(this).attr("data-svc-id");
+                console.debug("favourite click " + serviceId);
+            });
+
+            $(".btn-unfavourite").on("click", function () {
+                var serviceId = $(this).attr("data-svc-id");
+                console.debug("unfavourite click " + serviceId);
+            });
+
+            fmServiceRefresh();
+        });
+    </script>
+}

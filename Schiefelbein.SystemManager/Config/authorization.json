@@ -1,0 +1,40 @@
+{
+  "users-and-groups": [
+    {
+      "id": "david.schiefelbein@gmail.comx",
+      "label": "David Schiefelbein",
+      "type": "OidcUser",
+      "roles": [
+        "server-monitor",
+        "service-controller",
+        "admin"
+      ]
+    },
+    {
+      "id": "david.schiefelbein.2@gmail.com",
+      "label": "David Schiefelbein2",
+      "type": "OidcUser",
+      "roles": [
+        "server-monitor"
+      ]
+    },
+    {
+      "id": "dave",
+      "label": "Dave Schiefelbein",
+      "type": "ActiveDirectoryUser",
+      "roles": [
+        "server-monitor",
+        "service-controller",
+        "admin"
+      ]
+    },
+    {
+      "id": "Domain Users",
+      "label": "Domain Users",
+      "type": "ActiveDirectoryGroup",
+      "roles": [
+        "server-monitor"
+      ]
+    }
+  ]
+}

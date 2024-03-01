@@ -1,0 +1,36 @@
+{
+  "servers": [
+    {
+      "name": "nachomedia",
+      "systeminfo-url": "http://nachomedia:5009/systeminfo",
+      "services-url": "http://nachomedia:5009/services",
+      "cpu-cores": 4,
+      "user": "nachonet",
+      "password": "Nach0N3t"
+    },
+    {
+      "name": "nacho-hyperv",
+      "systeminfo-url": "http://nachohyperv:5009/systeminfo"
+    },
+    {
+      "name": "davepc",
+      "systeminfo-url": "http://localhost:5009/systeminfo"
+    },
+    {
+      "name": "brick",
+      "systeminfo-url": "http://localhost:5009/systeminfo"
+    },
+    {
+      "name": "Dave Tablet",
+      "systeminfo-url": "http://localhost:5009/systeminfo"
+    },
+    {
+      "name": "Dave Pixel Phone",
+      "url": "http://notahost:5009/systeminfo"
+    },
+    {
+      "name": "Google Home",
+      "url": "http://localhost:5009/systeminfo"
+    }
+  ]
+}
