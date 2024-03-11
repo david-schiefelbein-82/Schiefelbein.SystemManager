@@ -70,3 +70,15 @@ body {
 .server-link-inactive {
     color: black;
 }
+
+.sister-sites {
+    margin-top: 50px;
+}
+
+.sister-sites a {
+}
+
+.sister-sites a::after {
+    content: "\a";
+    white-space: pre;
+}

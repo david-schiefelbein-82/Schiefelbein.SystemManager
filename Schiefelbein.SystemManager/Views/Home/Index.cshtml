@@ -68,6 +68,15 @@
     }
 </div>
 
+<div class="text-center">
+    <div class="sister-sites">
+        @foreach (var sisterSite in Model.SisterSites)
+        {
+            <a href="@sisterSite.Url">@sisterSite.Name</a>
+        }
+    </div>
+</div>
+
 <div id="dialog-error-view" class="dialog-error-view fm-dialog fm-dialog-hidden">
     <div>
         <div class="pb-4">@Model.ErrorMessage</div>

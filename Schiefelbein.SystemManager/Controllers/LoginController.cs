@@ -50,7 +50,7 @@ namespace Schiefelbein.SystemManager.Controllers
         {
             if (_configManager.WebServer.LoginMethod != WebServerLoginType.ActiveDirectory &&
                 _configManager.WebServer.LoginMethod != WebServerLoginType.OidcAndActiveDirectory)
-                return RedirectToAction("Index", "Home", new { error = "Login with crentials not supported" });
+                return RedirectToAction("Index", "Home", new { error = "Login with crentials not supported", page });
 
             try
             {
@@ -63,7 +63,7 @@ namespace Schiefelbein.SystemManager.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Login-AD user: {user}", username);
-                return RedirectToAction("Index", "Home", new { error = ex.Message, page = page });
+                return RedirectToAction("Index", "Home", new { error = ex.Message, page });
             }
         }
 
@@ -74,6 +74,52 @@ namespace Schiefelbein.SystemManager.Controllers
             return RedirectToAction("Index", "Home");
         }
 
+        private static string? PageFromState(string? state)
+        {
+            if (state == null)
+                return null;
+
+            var parts = state.Split('&');
+            foreach (var part in parts)
+            {
+                if (part.StartsWith("page=", StringComparison.CurrentCultureIgnoreCase))
+                {
+                    return part.Substring("page=".Length);
+                }
+            }
+
+            return null;
+        }
+
+#if false
+        // NOTE: to get this to work, the jwt would likely need to contain a few critical
+        //       bits of information (everything returned by the OIDC lookup or AD lookup)
+        //       The JWT would also have to be signed with the same signing key
+        //  SECURITY NOTE: I have commented out this method for fear it could be a security vulnerability.
+        //                 theoretically the security is in the signing of the jwt, and if that is valid
+        //                 we can trust the user has logged in, but need to think about it.
+        //                 We also need to think about how the client would send the token... 
+        //                 is it safe for the browser to have access to the token? (probably is safe)
+        [HttpGet("signin-jwt")]
+        public async Task<ActionResult> SigninJwt(
+            [FromQuery(Name = "page")] string? page,
+            [FromQuery(Name = "jwt")] string? jwt)
+        {
+            if (jwt != null)
+            {
+                // first read the token
+                var token = _jwtSecurityTokenProvider.ReadAndValidateToken(jwt);
+
+                // TODO: extract name and type (OIDC or AD), and groups from the token claims
+
+                // TODO: now rebuild the token - this is nescessary because this site config contains roles
+            }
+
+            return RedirectToAction("Index", PageToController(page));
+        }
+#endif
+
+
         [HttpGet("signin-oidc")]
         public async Task<ActionResult> SigninOidcGet(
             [FromQuery(Name = "error")] string? error,
@@ -83,22 +129,23 @@ namespace Schiefelbein.SystemManager.Controllers
             [FromQuery(Name = "id_token")] string? idToken,
             [FromQuery(Name = "access_token")] string? accessToken)
         {
+            string? page = PageFromState(state);
             _logger.LogInformation("signin-oidc callback (GET) {sid} state: {state}", HttpContext.Session.Id, state);
 
             if (_configManager.WebServer.LoginMethod != WebServerLoginType.OIDC &&
                 _configManager.WebServer.LoginMethod != WebServerLoginType.OidcAndActiveDirectory)
-                return RedirectToAction("Index", "Home", new { error = "Login with OIDC not supported" });
+                return RedirectToAction("Index", "Home", new { page, error = "Login with OIDC not supported" });
 
             if (!string.IsNullOrEmpty(error))
             {
                 _logger.LogError("callback {error}: {errorDescription}", error, errorDescription);
-                return RedirectToAction("Index", "Home", new { error = string.Format("{0}: {1}", error, errorDescription) });
+                return RedirectToAction("Index", "Home", new { page, error = string.Format("{0}: {1}", error, errorDescription) });
             }
 
             if (string.IsNullOrEmpty(code) && string.IsNullOrEmpty(idToken) && string.IsNullOrEmpty(accessToken))
             {
                 _logger.LogWarning("no id_token, token or code supplied to callback {request}", Print(Request));
-                return RedirectToAction("Index", "Home", new { error = string.Format("no id_token, token or code supplied to callback") });
+                return RedirectToAction("Index", "Home", new { page, error = string.Format("no id_token, token or code supplied to callback") });
             }
 
             try
@@ -108,10 +155,10 @@ namespace Schiefelbein.SystemManager.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "GET callback {sid}", HttpContext.Session.Id);
-                return RedirectToAction("Index", "Home", new { error = ex.Message });
+                return RedirectToAction("Index", "Home", new { page, error = ex.Message });
             }
 
-            return RedirectToAction("Index", "ServerInfo");
+            return RedirectToAction("Index", PageToController(page));
         }
 
         [HttpPost("signin-oidc")]
@@ -124,6 +171,7 @@ namespace Schiefelbein.SystemManager.Controllers
             string? idToken = formCollection["id_token"];
             string? accessToken = formCollection["access_token"];
 
+            string? page = PageFromState(state);
             _logger.LogInformation("signin-oidc callback (POST) {sid} state: {state}", HttpContext.Session.Id, state);
 
             if (_configManager.WebServer.LoginMethod != WebServerLoginType.OIDC &&
@@ -133,12 +181,12 @@ namespace Schiefelbein.SystemManager.Controllers
             if (!string.IsNullOrEmpty(error))
             {
                 _logger.LogError("POST callback {error}: {errorDescription}", error, errorDescription);
-                return RedirectToAction("Index", "Home", new { error = string.Format("{0}: {1}", error, errorDescription) });
+                return RedirectToAction("Index", "Home", new { page, error = string.Format("{0}: {1}", error, errorDescription) });
             }
 
             if (string.IsNullOrEmpty(code) && string.IsNullOrEmpty(idToken) && string.IsNullOrEmpty(accessToken))
             {
-                return RedirectToAction("Index", "Home", new { error = string.Format("no id_token, token or code supplied to callback") });
+                return RedirectToAction("Index", "Home", new { page, error = string.Format("no id_token, token or code supplied to callback") });
             }
 
             try
@@ -148,10 +196,10 @@ namespace Schiefelbein.SystemManager.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "POST /callback/ {sid}", HttpContext.Session.Id);
-                return RedirectToAction("Index", "Home", new { error = ex.Message });
+                return RedirectToAction("Index", "Home", new { page, error = ex.Message });
             }
 
-            return RedirectToAction("Index", "ServerInfo");
+            return RedirectToAction("Index", PageToController(page));
         }
 
         private static string Print(HttpRequest request)

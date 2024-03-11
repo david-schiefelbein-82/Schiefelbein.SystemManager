@@ -35,7 +35,13 @@ namespace Schiefelbein.SystemManager.Controllers
         {
             HttpContext.Session.SetString("FileManager-SID", HttpContext.Session.Id);
             _logger.LogInformation("/ {sid}", HttpContext.Session.Id);
-            var model = new UserActionViewModel(error, page, info, _configManager.WebServer.LoginMethod, _configManager.WebServer.OidcLoginText, _configManager.WebServer.AdLoginText);
+
+            var sisterSites = (from x in
+                              _configManager.WebServer.SisterSites
+                               select new SisterSiteViewModel(x.Name, x.Url)).ToArray();
+
+            var model = new UserActionViewModel(error, page, info, _configManager.WebServer.LoginMethod, 
+                _configManager.WebServer.OidcLoginText, _configManager.WebServer.AdLoginText, sisterSites);
             return View(model);
         }
 

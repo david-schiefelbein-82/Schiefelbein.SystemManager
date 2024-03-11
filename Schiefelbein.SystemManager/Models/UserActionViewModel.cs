@@ -16,7 +16,10 @@ namespace Schiefelbein.SystemManager.Models
 
         public string AdLoginText { get; set; }
 
-        public UserActionViewModel(string? errorMessage, string? page, string? infoMessage, WebServerLoginType loginType, string oidcLoginText, string adLoginText)
+        public SisterSiteViewModel[] SisterSites { get; set; }
+
+        public UserActionViewModel(string? errorMessage, string? page, string? infoMessage, WebServerLoginType loginType, string oidcLoginText, string adLoginText,
+            SisterSiteViewModel[] sisterSites)
         {
             ErrorMessage = errorMessage;
             Page = page;
@@ -24,6 +27,7 @@ namespace Schiefelbein.SystemManager.Models
             LoginType = loginType;
             OidcLoginText = oidcLoginText;
             AdLoginText = adLoginText;
+            SisterSites = sisterSites;
         }
     }
 }
