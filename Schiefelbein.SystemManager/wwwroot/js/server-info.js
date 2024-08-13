@@ -187,7 +187,6 @@
         $.ajax({
             url: _urlSystemInfo,
         }).then(function (response) {
-            console.log("ajax succeeded");
             let cores = response.cpu.cores;
             for (var coreId = 0; coreId < cores.length && coreId < _cpuCoreCharts.length; coreId++) {
                 let values = cores[coreId];
