@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Schiefelbein.SystemManager.Models;
+using Schiefelbein.Utilities.SystemManager.Models;
 
 namespace Schiefelbein.SystemManager.Managers
 {

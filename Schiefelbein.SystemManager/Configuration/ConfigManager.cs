@@ -3,11 +3,19 @@ using System.Text.Json;
 using Schiefelbein.SystemManager.Models;
 using System;
 using Schiefelbein.Common.Web.Configuration;
+using Microsoft.CodeAnalysis.RulesetToEditorconfig;
 
 namespace Schiefelbein.SystemManager.Configuration
 {
     public class ConfigManager : IConfigManager
     {
+        private static readonly JsonSerializerOptions _toStringOptions = new()
+        {
+            WriteIndented = false,
+            PropertyNameCaseInsensitive = true,
+            Converters = { new JsonStringEnumConverter() },
+        };
+
         public static JsonSerializerOptions SerializationOptions => new()
         {
             WriteIndented = true,
@@ -34,12 +42,7 @@ namespace Schiefelbein.SystemManager.Configuration
 
         public override string ToString()
         {
-            return JsonSerializer.Serialize(this, new JsonSerializerOptions()
-            {
-                WriteIndented = false,
-                PropertyNameCaseInsensitive = true,
-                Converters = { new JsonStringEnumConverter() },
-            });
+            return JsonSerializer.Serialize(this, _toStringOptions);
         }
     }
 }

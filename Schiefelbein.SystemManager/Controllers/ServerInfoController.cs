@@ -8,22 +8,14 @@ using Schiefelbein.SystemManager.Models;
 namespace Schiefelbein.SystemManager.Controllers
 {
     [Authorize(Roles = SystemManagerRoles.ServerMonitor)]
-    public class ServerInfoController : Controller
+    public class ServerInfoController(
+        ILogger<ServerInfoController> logger,
+        WebServerConfig webServerConfig,
+        IConfigManager configManager) : Controller
     {
-        private readonly ILogger<ServerInfoController> _logger;
-        private readonly WebServerConfig _webServerConfig;
-        private readonly IConfigManager _configManager;
-
-        public ServerInfoController(
-            ILogger<ServerInfoController> logger,
-            WebServerConfig webServerConfig,
-            IConfigManager configManager)
-        {
-            _logger = logger;
-            _webServerConfig = webServerConfig;
-            _configManager = configManager;
-        }
-
+        private readonly ILogger<ServerInfoController> _logger = logger;
+        private readonly WebServerConfig _webServerConfig = webServerConfig;
+        private readonly IConfigManager _configManager = configManager;
 
         [HttpGet("[controller]/")]
         [AllowAnonymous]
@@ -42,16 +34,13 @@ namespace Schiefelbein.SystemManager.Controllers
             serverName = this.LoadServerName(serverName, serverList);
             this.SaveServerName(serverName);
 
-            var vm = new ServerInfoViewModel(serverList, serverName, 16);
+            var vm = new ServerInfoViewModel(serverList, serverName, 16, [ "C:\\" ]);
             _logger.LogDebug("Index -- {sid} viewModel: {vm}", HttpContext.Session.Id, vm);
 
-            var configItem = _configManager.Servers.Servers.FirstOrDefault(x => string.Equals(x.Name, serverName, StringComparison.CurrentCultureIgnoreCase));
-            if (configItem == null)
-            {
+            var configItem = _configManager.Servers.Servers.FirstOrDefault(x => string.Equals(x.Name, serverName, StringComparison.CurrentCultureIgnoreCase)) ??
                 throw new Exception("unknown server " + serverName);
-            }
-
             vm.CpuCores = configItem.CpuCores;
+            vm.Disks = configItem.Disks;
 
             return View(vm);
         }

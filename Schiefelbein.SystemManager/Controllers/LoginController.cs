@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.Tokens;
 using Schiefelbein.Common.Web;
 using Schiefelbein.Common.Web.ActiveDirectory;
+using Schiefelbein.Common.Web.AppLocal;
 using Schiefelbein.Common.Web.Oidc;
 using Schiefelbein.SystemManager.Configuration;
 using Schiefelbein.SystemManager.Data;
@@ -38,15 +40,16 @@ namespace Schiefelbein.SystemManager.Controllers
             _configManager = configManager;
             _jwtSecurityTokenProvider = jwtSecurityTokenProvider;
             _activeDirectoryUserAuthenticator = activeDirectoryUserAuthenticator;
+            _logger.LogDebug("Created LoginController");
         }
 
-        public IActionResult Index(string? page)
+        public IActionResult Index()
         {
             return View();
         }
 
         [HttpPost("[controller]/signin-ad")]
-        public ActionResult SigninAd(string? page, string username, string password)
+        public async Task<ActionResult> SigninAdAsync(string? page, string username, string password, CancellationToken cancellationToken = default)
         {
             if (_configManager.WebServer.LoginMethod != WebServerLoginType.ActiveDirectory &&
                 _configManager.WebServer.LoginMethod != WebServerLoginType.OidcAndActiveDirectory)
@@ -56,8 +59,7 @@ namespace Schiefelbein.SystemManager.Controllers
             {
                 var user = _activeDirectoryUserAuthenticator.Login(username, password);
                 _logger.LogInformation("Login-AD success, {user}", user);
-                CreateAuthenticationToken(user);
-
+                await CreateAuthenticationTokenAsync(user, cancellationToken);
                 return RedirectToAction("Index", PageToController(page));
             }
             catch (Exception ex)
@@ -91,43 +93,16 @@ namespace Schiefelbein.SystemManager.Controllers
             return null;
         }
 
-#if false
-        // NOTE: to get this to work, the jwt would likely need to contain a few critical
-        //       bits of information (everything returned by the OIDC lookup or AD lookup)
-        //       The JWT would also have to be signed with the same signing key
-        //  SECURITY NOTE: I have commented out this method for fear it could be a security vulnerability.
-        //                 theoretically the security is in the signing of the jwt, and if that is valid
-        //                 we can trust the user has logged in, but need to think about it.
-        //                 We also need to think about how the client would send the token... 
-        //                 is it safe for the browser to have access to the token? (probably is safe)
-        [HttpGet("signin-jwt")]
-        public async Task<ActionResult> SigninJwt(
-            [FromQuery(Name = "page")] string? page,
-            [FromQuery(Name = "jwt")] string? jwt)
-        {
-            if (jwt != null)
-            {
-                // first read the token
-                var token = _jwtSecurityTokenProvider.ReadAndValidateToken(jwt);
-
-                // TODO: extract name and type (OIDC or AD), and groups from the token claims
-
-                // TODO: now rebuild the token - this is nescessary because this site config contains roles
-            }
-
-            return RedirectToAction("Index", PageToController(page));
-        }
-#endif
-
 
         [HttpGet("signin-oidc")]
-        public async Task<ActionResult> SigninOidcGet(
+        public async Task<ActionResult> SigninOidcGetAsync(
             [FromQuery(Name = "error")] string? error,
             [FromQuery(Name = "error_description")] string? errorDescription,
             [FromQuery(Name = "state")] string? state,
             [FromQuery(Name = "code")] string? code,
             [FromQuery(Name = "id_token")] string? idToken,
-            [FromQuery(Name = "access_token")] string? accessToken)
+            [FromQuery(Name = "access_token")] string? accessToken,
+            CancellationToken cancellationToken = default)
         {
             string? page = PageFromState(state);
             _logger.LogInformation("signin-oidc callback (GET) {sid} state: {state}", HttpContext.Session.Id, state);
@@ -150,7 +125,7 @@ namespace Schiefelbein.SystemManager.Controllers
 
             try
             {
-                await Login(state, code, idToken, accessToken);
+                await LoginAsync(state, code, idToken, accessToken, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -162,7 +137,7 @@ namespace Schiefelbein.SystemManager.Controllers
         }
 
         [HttpPost("signin-oidc")]
-        public async Task<ActionResult> SigninOidcPost(IFormCollection formCollection)
+        public async Task<ActionResult> SigninOidcPost(IFormCollection formCollection, CancellationToken cancellationToken = default)
         {
             string? error = formCollection["error"];
             string? errorDescription = formCollection["error_description"];
@@ -191,7 +166,7 @@ namespace Schiefelbein.SystemManager.Controllers
 
             try
             {
-                await Login(state, code, idToken, accessToken);
+                await LoginAsync(state, code, idToken, accessToken, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -214,18 +189,27 @@ namespace Schiefelbein.SystemManager.Controllers
             return sb.ToString();
         }
 
-        public void CreateAuthenticationToken(OidcJwtToken idToken)
+        public async Task CreateAuthenticationTokenAsync(OidcJwtToken idToken, CancellationToken cancellationToken = default)
         {
             var token = _jwtSecurityTokenProvider.CreateAuthenticationToken(idToken);
-            _logger.LogInformation("OIDC User Login {claims}", PrintClaims(token));
-            HttpContext.Session.SetString("jwtToken", _jwtSecurityTokenProvider.WriteToken(token));
+            var validationResult = await _jwtSecurityTokenProvider.ReadAndValidateTokenAsync(token, cancellationToken);
+            _logger.LogInformation("OIDC User Login {claims}", PrintClaims(validationResult));
+            HttpContext.Session.SetString("jwtToken", token);
         }
 
-        public void CreateAuthenticationToken(ActiveDirectoryUser user)
+        public async Task CreateAuthenticationTokenAsync(ActiveDirectoryUser adUser, CancellationToken cancellationToken = default)
         {
-            var token = _jwtSecurityTokenProvider.CreateAuthenticationToken(user);
-            _logger.LogInformation("AD User Login {claims}", PrintClaims(token));
-            HttpContext.Session.SetString("jwtToken", _jwtSecurityTokenProvider.WriteToken(token));
+            var token = _jwtSecurityTokenProvider.CreateAuthenticationToken(adUser);
+            var validationResult = await _jwtSecurityTokenProvider.ReadAndValidateTokenAsync(token, cancellationToken);
+            _logger.LogInformation("AD User Login {claims}", PrintClaims(validationResult));
+            HttpContext.Session.SetString("jwtToken", token);
+        }
+        public async Task CreateAuthenticationTokenAsync(IAppLocalUser localUser, CancellationToken cancellationToken = default)
+        {
+            var token = _jwtSecurityTokenProvider.CreateAuthenticationToken(localUser);
+            var validationResult = await _jwtSecurityTokenProvider.ReadAndValidateTokenAsync(token, cancellationToken);
+            _logger.LogInformation("Local User Login {claims}", PrintClaims(validationResult));
+            HttpContext.Session.SetString("jwtToken", token);
         }
 
         public void ClearAuthenticationToken()
@@ -241,7 +225,7 @@ namespace Schiefelbein.SystemManager.Controllers
         /// <param name="idToken">the id_token returned by the authentication attempt</param>
         /// <param name="accessToken">the access_token returned by the authentication attempt</param>
         /// <returns>Once the user is logged in.  Throws an exeption otherwise</returns>
-        private async Task Login(string? state, string? code, string? idToken, string? accessToken)
+        private async Task LoginAsync(string? state, string? code, string? idToken, string? accessToken, CancellationToken cancellationToken = default)
         {
             if (state == null)
                 return;
@@ -252,11 +236,11 @@ namespace Schiefelbein.SystemManager.Controllers
 
             if (code != null)
             {
-                await LoginWithCode(_oidcClient, code);
+                await LoginWithCodeAsync(_oidcClient, code, cancellationToken);
             }
             else
             {
-                await LoginWithIdToken(_oidcClient, idToken, accessToken);
+                await LoginWithIdTokenAsync(_oidcClient, idToken, accessToken, cancellationToken);
             }
         }
 
@@ -265,7 +249,7 @@ namespace Schiefelbein.SystemManager.Controllers
         /// </summary>
         /// <param name="idTokenStr"></param>
         /// <param name="accessTokenStr"></param>
-        private async Task LoginWithIdToken(IOidcClient client, string? idTokenStr, string? accessTokenStr)
+        private async Task LoginWithIdTokenAsync(IOidcClient client, string? idTokenStr, string? accessTokenStr, CancellationToken cancellationToken = default)
         {
             OidcJwtToken? idToken = null;
             OidcJwtToken? accessToken = null;
@@ -279,28 +263,28 @@ namespace Schiefelbein.SystemManager.Controllers
             if (idToken != null)
             {
                 // validation throws an exception if it fails
-                await client.ValidateJwt(idToken);
+                await client.ValidateJwtAsync(idToken, cancellationToken);
                 _logger.LogInformation("id_token is valid (signature has been verified)");
 
-                CreateAuthenticationToken(idToken);
+                await CreateAuthenticationTokenAsync(idToken, cancellationToken);
             }
         }
 
-        private async Task LoginWithCode(IOidcClient client, string code)
+        private async Task LoginWithCodeAsync(IOidcClient client, string code, CancellationToken cancellationToken = default)
         {
             // if we have a code, then we call a rest api to get the tokens from it
             try
             {
-                var codeToken = await client.GetToken(code);
+                var codeToken = await client.GetTokenAsync(code, cancellationToken);
                 _ = OidcJwtToken.TryParse(codeToken.IdTokenBase64 ?? string.Empty, out OidcJwtToken? idToken);
 
                 if (idToken != null)
                 {
                     // validation throws an exception if it fails
-                    await client.ValidateJwt(idToken);
+                    await client.ValidateJwtAsync(idToken, cancellationToken);
                     _logger.LogInformation("id_token is valid (signature has been verified)");
 
-                    CreateAuthenticationToken(idToken);
+                    await CreateAuthenticationTokenAsync(idToken, cancellationToken);
                 }
             }
             catch (Exception ex)
@@ -310,11 +294,28 @@ namespace Schiefelbein.SystemManager.Controllers
             }
         }
 
-        private string PrintClaims(JwtSecurityToken token)
+        private static string PrintClaims(TokenValidationResult validationResult)
         {
-            return string.Join(", ", from x
-                                     in token.Claims
-                                     select x.Type + " = " + x.Value);
+            var sb = new StringBuilder();
+            int count = 0;
+            foreach (var kvp in validationResult.Claims)
+            {
+                var key = kvp.Key;
+                var value = kvp.Value;
+                if (count++ == 0)
+                    sb.Append(", ");
+
+                if (value is string valueStr)
+                {
+                    sb.AppendFormat("{0}: {1}", key, valueStr);
+                }
+                else if (value is IList<object> list)
+                {
+                    sb.AppendFormat("{0}: [{1}]", key, string.Join(',', list));
+                }
+            }
+
+            return sb.ToString();
         }
     }
 }

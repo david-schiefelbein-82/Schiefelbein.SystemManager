@@ -1,5 +1,6 @@
 ﻿namespace Schiefelbein.SystemManager.Models
 {
+#if false
     public class ServiceOperationResult
     {
         public string Name { get; set; }
@@ -20,4 +21,5 @@
             return string.Format("{{ name: {0}, success: {1}, error: {2} }}", Name, Success, Error);
         }
     }
+#endif
 }

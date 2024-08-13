@@ -43,6 +43,7 @@ namespace Schiefelbein.SystemManager
             builder.Services.AddTransient<IActiveDirectoryConfig>(x => configManager.WebServer.ActiveDirectory);
             builder.Services.AddTransient<IActiveDirectoryUserAuthenticator, ActiveDirectoryUserAuthenticator>();
             builder.Services.AddTransient<IJwtTokenAuthenticationConfig>(x => configManager.WebServer.JwtTokenAuthentication);
+            builder.Services.AddSingleton<ISystemManagerSelector, SystemManagerSelector>();
             builder.Services.AddSingleton<IServiceManager, ServiceManager>();
 
             var key = configManager.WebServer.JwtTokenAuthentication.GetTokenSigningKey();
@@ -122,7 +123,7 @@ namespace Schiefelbein.SystemManager
                 var jwtToken = context.Session.GetString("jwtToken");
                 if (!string.IsNullOrEmpty(jwtToken))
                 {
-                    context.Request.Headers.Add("Authorization", "Bearer " + jwtToken);
+                    context.Request.Headers.Append("Authorization", "Bearer " + jwtToken);
                 }
                 await next();
             });

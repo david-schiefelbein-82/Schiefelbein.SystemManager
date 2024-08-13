@@ -3,6 +3,7 @@
     var _urlSystemInfo = urlSystemInfo;
     var _cpuCoreCharts = [];
     var _memoryChart;
+    var _diskCharts = {};
 
     function createCpuCoreGraph(elementId, coreId) {
         var cpuCoreChart = createGraph(elementId, 'cpu ' + coreId);
@@ -13,6 +14,65 @@
         _memoryChart = createGraph(elementId, 'memory');
     }
 
+    function createDiskGraph(elementId, title) {
+        let diskChart = createPieGraph(elementId, title);
+        _diskCharts[title] = diskChart;
+    }
+
+    /// SUMMARY
+    ///        Create a graph on the element
+    function createPieGraph(elementId, title) {
+        const canvas = document.getElementById(elementId);
+        
+        const data = {
+            labels: ['Used', 'Free'],
+            datasets: [
+                {
+                    label: '',
+                    data: [100],
+                    backgroundColor: ['rgb(200, 200, 200)'],
+                }
+            ]
+        };
+        
+        const config = {
+            type: 'pie',
+            data: data,
+            options: {
+                maintainAspectRatio: false,
+                legend: {
+                    display: false
+                },
+                animation: {
+                    duration: 50, // general animation time
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: true,
+                        text: title
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                return printBytes(context.raw);
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        const jsChart = new Chart(
+            canvas,
+            config
+        );
+
+        return jsChart;
+    }
+
     /// SUMMARY
     ///        Create a graph on the element
     function createGraph(elementId, label) {
@@ -20,11 +80,6 @@
 
         var startLabels = [];
         var startData = [];
-
-        //for (var i = 0; i < 60; ++i) {
-        //    startLabels.push('');
-        //    startData.push({ x: i, y: 0 });
-        //}
 
         const data = {
             labels: startLabels,
@@ -87,7 +142,7 @@
     /// SUMMARY
     ///         : retrieve system info stats and update the graphs
     ///
-    function initSystem(cpuCoreCount, cpuCoreSelectors, memorySelector, callback) {
+    function initSystem(cpuCoreCount, cpuCoreSelectors, memorySelector, diskSelector, callback) {
         var start = performance.now();
         $.ajax({
             url: _urlSystemInfo,
@@ -103,6 +158,15 @@
             let memory = response.memory.percentUtilised;
             if (memory.length > 0) {
                 initData(_memoryChart, memory);
+            }
+
+            let disks = response.disk;
+            if (disks !== null && disks !== undefined) {
+                for (disk of disks) {
+                    let chart = _diskCharts[disk.name];
+                    if (chart !== null && chart !== undefined)
+                        initDiskData(chart, disk);
+                }
             }
 
             callback(true);
@@ -136,6 +200,16 @@
                 addData(_memoryChart, memory[memory.length - 1]);
             }
 
+            let disks = response.disk;
+            if (disks !== null && disks !== undefined) {
+                for (disk of disks) {
+                    var chart = _diskCharts[disk.name];
+                    if (chart !== null && chart !== undefined) {
+                        addDiskData(_diskCharts[disk.name], disk);
+                    }
+                }
+            }
+
             callback(true);
         }).catch(function (jqXHR, textStatus, errorThrown) {
             var text = jqXHR.responseText;
@@ -161,6 +235,27 @@
         chart.update();
     }
 
+    function initDiskData(chart, diskData) {
+        let freeSpace = diskData.freeSpace[diskData.freeSpace.length - 1];
+        let total = diskData.totalSize;
+        let usedSpace = total - freeSpace;
+        var name = diskData.name;
+        var driveFormat = diskData.driveFormat;
+        var driveType = diskData.driveType;
+        if (driveType !== undefined && driveType != null) {
+            if (driveType == "Fixed") {
+                chart.options.plugins.title.text = name + " " + driveFormat;
+            } else {
+                chart.options.plugins.title.text = name + " " + driveType;
+            }
+        }
+        chart.data.datasets.forEach((dataset) => {
+            dataset.data = [usedSpace, freeSpace]
+            dataset.backgroundColor = ['rgb(255, 128, 128)', 'rgb(128, 255, 128)'];
+        });
+        chart.update();
+    }
+
     /// SUMMARY
     ///         : function to add a point of data to an existing chart
     ///
@@ -174,10 +269,34 @@
         chart.update();
     }
 
+    function printBytes(bytes) {
+        let MB = 1024.0 * 1024.0;
+        let GB = MB * 1024.0;
+        let TB = GB * 1024.0;
+        if (bytes >= TB) {
+            var tb = bytes / TB;
+            return " " + (Math.round(tb * 100) / 100.0).toLocaleString() + " TB";
+        }
+
+        var gb = bytes / GB;
+        return " " + (Math.round(gb * 10) / 10.0).toLocaleString() + " GB";
+    }
+
+    function addDiskData(chart, diskData) {
+        let freeSpace = diskData.freeSpace[diskData.freeSpace.length - 1];
+        let total = diskData.totalSize;
+        let usedSpace = total - freeSpace;
+        chart.data.datasets.forEach((dataset) => {
+            dataset.data = [ usedSpace, freeSpace ];
+        });
+        chart.update();
+    }
+
     var obj = {
         addData: addData,
         createCpuCoreGraph: createCpuCoreGraph,
         createMemoryGraph: createMemoryGraph,
+        createDiskGraph: createDiskGraph,
         init: initSystem,
         refresh: refresh,
     };

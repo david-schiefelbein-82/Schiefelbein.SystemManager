@@ -6,6 +6,7 @@ using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Schiefelbein.Common.Web.Configuration;
+using Microsoft.CodeAnalysis.RulesetToEditorconfig;
 
 namespace Schiefelbein.SystemManager.Configuration
 {
@@ -18,6 +19,12 @@ namespace Schiefelbein.SystemManager.Configuration
 
     public class WebServerConfig
     {
+        private static readonly JsonSerializerOptions _toStringOptions = new ()
+        {
+            WriteIndented = false,
+            PropertyNameCaseInsensitive = true,
+            Converters = { new JsonStringEnumConverter() },
+        };
 
         [JsonPropertyName("client-debugging")]
         public bool ClientDebugging { get; set; }
@@ -59,7 +66,7 @@ namespace Schiefelbein.SystemManager.Configuration
             OidcLoginText = "Login";
             AdLoginText = "Login";
             Oidc = new OidcConfig();
-            SisterSites = Array.Empty<SisterSiteConfig>();
+            SisterSites = [];
             ActiveDirectory = new ActiveDirectoryConfig();
             JwtTokenAuthentication = new JwtTokenAuthenticationConfig();
         }
@@ -80,12 +87,7 @@ namespace Schiefelbein.SystemManager.Configuration
 
         public override string ToString()
         {
-            return JsonSerializer.Serialize(this, new JsonSerializerOptions()
-            {
-                WriteIndented = false,
-                PropertyNameCaseInsensitive = true,
-                Converters = { new JsonStringEnumConverter() },
-            });
+            return JsonSerializer.Serialize(this, _toStringOptions);
         }
     }
 }

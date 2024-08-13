@@ -8,11 +8,11 @@ namespace Schiefelbein.SystemManager.Controllers
     {
         private const string KEY_SERVER_NAME = "serverName";
 
-        public static void SetAuthHeader(this HttpRequestMessage request, ServerInfoConfig config)
-        {
-            var auth = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes(config.User + ":" + config.Password));
-            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", auth);
-        }
+        //public static void SetAuthHeader(this HttpRequestMessage request, ServerInfoConfig config)
+        //{
+        //    var auth = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes(config.User + ":" + config.Password));
+        //    request.Headers.Authorization = new AuthenticationHeaderValue("Basic", auth);
+        //}
 
         public static string LoadServerName(this Controller controller, string? serverName, string[] serverList)
         {

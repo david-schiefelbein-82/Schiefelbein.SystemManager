@@ -7,6 +7,17 @@
     <link rel="stylesheet" href="~/css/fm-dialog.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/system-info.css" asp-append-version="true" />
 }
+@functions {
+    public static string GetDiskGraphId(string disk)
+    {
+        if (disk.Length > 0)
+        {
+            return "disk-chart-" + disk[0];
+        }
+
+        return "disk-chart";
+    }
+}
 
 <div id="liveAlerts" class="live-alerts"></div>
 <div class="bg-light">
@@ -76,15 +87,33 @@
             </div>
         </div>
     </div>
+    <div class="shadow-lg p-3 mb-5 bg-body-tertiary rounded">
+        <div class="container-fluid">
+            <div class="card mx-auto">
+                <div class="row text-center"><h2>Disks</h2></div>
+                <div class="row memory-row gx-0 px-0">
+                    @foreach (var disk in Model.Disks)
+                    {
+                        <div class="col memory-col memory-col col-md-auto p-0">
+                            <div class="memory-chart-container">
+                                <canvas id="@GetDiskGraphId(disk)" class="disk-chart"></canvas>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
-@section Scripts{
+@section Scripts {
     <script src="~/js/alerts.js" asp-append-version="true"></script>
     <script src="~/lib/chart.js/chart.umd.js"></script>
     <script src="~/js/server-info.js"></script>
 
     <script>
         var cpuCoreCount = @Model.CpuCores;
+        var disks = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Disks));
         var systemInfo;
         var serverName = "@Model.ServerName";
 
@@ -97,10 +126,21 @@
             }
 
             systemInfo.createMemoryGraph('memory-chart', 'memory');
-            systemInfo.init(cpuCoreCount, 'cpu-$i-chart', 'memory-chart', function (success, errorMessage) {
+            for (disk of disks) {
+                systemInfo.createDiskGraph(getDiskGraphId(disk), disk);
+            }
+            systemInfo.init(cpuCoreCount, 'cpu-$i-chart', 'memory-chart', 'disk-chart', function (success, errorMessage) {
             });
             refreshSoon();
         });
+
+        function getDiskGraphId(disk) {
+            if (disk.length > 0) {
+                return "disk-chart-" + disk[0];
+            }
+
+            return "disk-chart";
+        }
 
         function refreshSoon() {
             setTimeout(function () {

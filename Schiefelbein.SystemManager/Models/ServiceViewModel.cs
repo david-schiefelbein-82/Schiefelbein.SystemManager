@@ -3,6 +3,7 @@ using System.Text;
 
 namespace Schiefelbein.SystemManager.Models
 {
+#if false
     public enum ServiceStatus
     {
         Unknown = 0,
@@ -103,4 +104,5 @@ namespace Schiefelbein.SystemManager.Models
             return sb.ToString();
         }
     }
+#endif
 }

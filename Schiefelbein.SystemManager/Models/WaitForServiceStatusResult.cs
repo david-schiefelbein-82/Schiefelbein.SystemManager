@@ -5,7 +5,9 @@ using System.Text.Json.Serialization;
 
 namespace Schiefelbein.SystemManager.Models
 {
-    public class WaitForServiceStatusResult
+#if false
+
+    public class xWaitForServiceStatusResult
     {
         public string Id { get; set; }
         public string Name { get; set; }
@@ -31,4 +33,5 @@ namespace Schiefelbein.SystemManager.Models
             return string.Format("{{ id: {0}, name: {1}, success: {2}, error: {3}, status: {4} }}", Name, Success, Error, Status);
         }
     }
+#endif
 }

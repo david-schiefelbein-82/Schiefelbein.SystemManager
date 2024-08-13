@@ -6,9 +6,7 @@ using Schiefelbein.SystemManager.Data;
 using Schiefelbein.SystemManager.Errors;
 using Schiefelbein.SystemManager.Managers;
 using Schiefelbein.SystemManager.Models;
-using System.Linq;
-using System.Threading;
-using System.Xml.Linq;
+using Schiefelbein.Utilities.SystemManager.Models;
 
 namespace Schiefelbein.SystemManager.Controllers
 {
@@ -24,6 +22,7 @@ namespace Schiefelbein.SystemManager.Controllers
             _logger = logger;
             _serviceManager = serviceManager;
             _configManager = configManager;
+            _logger.LogDebug("Created {name}", nameof(ServicesController));
         }
 
         [AllowAnonymous]

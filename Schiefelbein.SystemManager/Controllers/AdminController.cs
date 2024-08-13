@@ -12,16 +12,10 @@ using System.ServiceProcess;
 namespace Schiefelbein.SystemManager.Controllers
 {
     [Authorize(Roles = SystemManagerRoles.Admin)]
-    public class AdminController : Controller
+    public class AdminController(ILogger<AdminController> logger, IConfigManager configManager) : Controller
     {
-        private readonly ILogger<AdminController> _logger;
-        private readonly IConfigManager _configManager;
-
-        public AdminController(ILogger<AdminController> logger, IConfigManager configManager)
-        {
-            _logger = logger;
-            _configManager = configManager;
-        }
+        private readonly ILogger<AdminController> _logger = logger;
+        private readonly IConfigManager _configManager = configManager;
 
         [AllowAnonymous]
         public ActionResult Index()
@@ -110,12 +104,8 @@ namespace Schiefelbein.SystemManager.Controllers
         {
             try
             {
-                var item = _configManager.Authorization.UsersAndGroups.FirstOrDefault(x => x.Id == origId && x.Type == origType);
-                if (item == null)
-                {
-                    throw new Exception("cannot edit item");
-                }
-
+                var item = _configManager.Authorization.UsersAndGroups.FirstOrDefault(x => x.Id == origId && x.Type == origType) ?? throw new Exception("cannot edit item");
+                
                 if (!string.IsNullOrEmpty(id) && string.Equals(id, this.User.Identity?.Name, StringComparison.CurrentCultureIgnoreCase) && !admin)
                 {
                     var model = new AuthEntityViewModelWithError() { ErrorMessage = "Cannot remove admin permissions from yourself" };
@@ -156,7 +146,7 @@ namespace Schiefelbein.SystemManager.Controllers
             if (admin)
                 roles.Add(SystemManagerRoles.Admin);
 
-            return roles.ToArray();
+            return [.. roles];
         }
 
         public ActionResult Delete(string id, AuthEntityType type)
@@ -177,7 +167,7 @@ namespace Schiefelbein.SystemManager.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public ActionResult Delete(string id, string label, AuthEntityType type, IFormCollection collection)
+        public ActionResult Delete(string id, string label, AuthEntityType type, IFormCollection _)
         {
             try
             {

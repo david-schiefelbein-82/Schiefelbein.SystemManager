@@ -1,54 +1,31 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Schiefelbein.SystemManager.Configuration;
 using Schiefelbein.SystemManager.Errors;
-using System.Net.Http.Headers;
-using System.Text.Json;
+using Schiefelbein.SystemManager.Managers;
+using Schiefelbein.Utilities.SystemManager.Client;
+using Schiefelbein.Utilities.SystemManager.Models;
+using System.Configuration;
 
 namespace Schiefelbein.SystemManager.Controllers
 {
     [Route("system-info")]
-    public class SystemInfoController : Controller
+    public class SystemInfoController(ILogger<SystemInfoController> logger, ISystemManagerSelector systemManagerSelector, IConfigManager configManager) : Controller
     {
-        private readonly ILogger<SystemInfoController> _logger;
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IConfigManager _configManager;
-
-        public SystemInfoController(ILogger<SystemInfoController> logger, IHttpClientFactory httpClientFactory, IConfigManager configManager)
-        {
-            _logger = logger;
-            _httpClientFactory = httpClientFactory;
-            _configManager = configManager;
-        }
+        private readonly ILogger<SystemInfoController> _logger = logger;
+        private readonly ISystemManagerSelector _systemManagerSelector = systemManagerSelector;
+        private readonly IConfigManager _configManager = configManager;
 
         [ServiceManagerExceptionFilter]
-        public async Task<JsonDocument> IndexAsync(string serverName, CancellationToken cancellationToken)
+        public async Task<SystemInfoModel> IndexAsync(string serverName, CancellationToken cancellationToken)
         {
-            var config = _configManager.Servers.Servers.FirstOrDefault(x => string.Equals(serverName, x.Name, StringComparison.CurrentCultureIgnoreCase))
-                ?? throw new ServiceManagerException("Cannot find server " + serverName, System.Net.HttpStatusCode.NotFound);
-
-            var uri = config.SystemInfoUrl;
+            var client = _systemManagerSelector.GetSystemManagerClient(serverName);
             try
             {
-                using var client = _httpClientFactory.CreateClient();
-                using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-                request.SetAuthHeader(config);
-                using var result = await client.SendAsync(request, cancellationToken);
-                if (result.StatusCode != System.Net.HttpStatusCode.OK)
-                {
-                    var errorMsg = await result.Content.ReadAsStringAsync(cancellationToken);
-                    _logger.LogError("Error getting SystemInfo - {url} - {statusCodeNum} {statusCode} : {errorMsg}", uri, (int)result.StatusCode, result.StatusCode, errorMsg);
-                    string msg = string.Format("Error getting SystemInfo for server {0} - {1} {2} : {3}", serverName, (int)result.StatusCode, result.StatusCode, errorMsg);
-                    throw new ServiceManagerException(msg, result.StatusCode);
-                }
+                var result = await client.GetSystemInfoAsync(cancellationToken);
 
-                var json = await result.Content.ReadAsStringAsync(cancellationToken);
-                var doc = JsonSerializer.Deserialize<JsonDocument>(json);
-                if (doc == null)
-                {
-                    throw new ServiceManagerException("Unable to get ServerInfo (invalid JSON)", System.Net.HttpStatusCode.InternalServerError);
-                }
+                UpdateConfig(serverName, result);
 
-                return doc;
+                return result;
             }
             catch (ServiceManagerException ex)
             {
@@ -59,6 +36,38 @@ namespace Schiefelbein.SystemManager.Controllers
             {
                 _logger.LogError(ex, "Index");
                 throw;
+            }
+        }
+
+        private void UpdateConfig(string serverName, SystemInfoModel result)
+        {
+            var config = _configManager.Servers.Servers.FirstOrDefault(x => string.Equals(x.Name, serverName, StringComparison.InvariantCultureIgnoreCase));
+            bool modified = false;
+            if (config != null)
+            {
+                var resultCpuCores = result.Cpu.Cores.Count;
+                if (result.Cpu.Cores.Count > 0 && config.CpuCores != resultCpuCores)
+                {
+                    var configuredCpuCores = config.CpuCores;
+                    config.CpuCores = result.Cpu.Cores.Count;
+                    modified = true;
+                    _logger.LogInformation("Changed Server {serverName} from {old} -> {new} cpuCores", serverName, configuredCpuCores, resultCpuCores);
+                    }
+
+                var names = string.Join(',', (from x in result.Disk select x.Name));
+                var disks = string.Join(',', config.Disks);
+                if (!string.Equals(names, disks))
+                {
+                    config.Disks = [.. (from x in result.Disk select x.Name)];
+                    _logger.LogInformation("Changed Disks {serverName} from {old} -> {new} disks", serverName, disks, names);
+                        modified = true;
+                }
+
+                if (modified)
+                {
+                    _logger.LogInformation("Saving Servers config");
+                    _configManager.Servers.Save();
+                }
             }
         }
     }

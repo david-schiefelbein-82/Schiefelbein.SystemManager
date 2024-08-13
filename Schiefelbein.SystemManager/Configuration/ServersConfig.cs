@@ -1,12 +1,13 @@
 ﻿using Microsoft.AspNetCore.Hosting.Server;
 using Schiefelbein.SystemManager.Errors;
 using Schiefelbein.SystemManager.Models;
+using Schiefelbein.Utilities.SystemManager.Client;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Schiefelbein.SystemManager.Configuration
 {
-    public class ServerInfoConfig
+    public class ServerInfoConfig : ISystemMonitorClientConfig
     {
         [JsonPropertyName("name")]
         public string Name { get; set; }
@@ -20,8 +21,11 @@ namespace Schiefelbein.SystemManager.Configuration
         [JsonPropertyName("cpu-cores")]
         public int CpuCores { get; set; }
 
+        [JsonPropertyName("disks")]
+        public string[] Disks { get; set; }
+
         [JsonPropertyName("user")]
-        public string User { get; set; }
+        public string Username { get; set; }
 
         [JsonPropertyName("password")]
         public string Password { get; set; }
@@ -32,7 +36,8 @@ namespace Schiefelbein.SystemManager.Configuration
             SystemInfoUrl = string.Empty;
             ServicesUrl = string.Empty;
             CpuCores = 1;
-            User = string.Empty;
+            Disks = ["C:\\"];
+            Username = string.Empty;
             Password = string.Empty;
         }
 
@@ -44,12 +49,19 @@ namespace Schiefelbein.SystemManager.Configuration
 
     public class ServersConfig
     {
+        private static readonly JsonSerializerOptions _options = new ()
+        {
+            WriteIndented = false,
+            PropertyNameCaseInsensitive = true,
+            Converters = { new JsonStringEnumConverter() },
+        };
+
         [JsonPropertyName("servers")]
         public ServerInfoConfig[] Servers { get; set; }
 
         public ServersConfig()
         {
-            Servers = Array.Empty<ServerInfoConfig>();
+            Servers = [];
         }
 
         public static ServersConfig Load()
@@ -60,14 +72,15 @@ namespace Schiefelbein.SystemManager.Configuration
             return config;
         }
 
+        public void Save()
+        {
+            using var fileStream = new FileStream("Config\\servers.json", FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+            JsonSerializer.Serialize(fileStream, this, ConfigManager.SerializationOptions);
+        }
+
         public override string ToString()
         {
-            return JsonSerializer.Serialize(this, new JsonSerializerOptions()
-            {
-                WriteIndented = false,
-                PropertyNameCaseInsensitive = true,
-                Converters = { new JsonStringEnumConverter() },
-            });
+            return JsonSerializer.Serialize(this, _options);
         }
     }
 }
