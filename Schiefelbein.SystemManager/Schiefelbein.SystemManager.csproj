@@ -10,7 +10,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.7" />
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="8.0.3" />
     <PackageReference Include="Schiefelbein.Common.Web" Version="8.0.0.2" />
-    <PackageReference Include="Schiefelbein.Utilities.SystemManager.Client" Version="8.0.0.5" />
+    <PackageReference Include="Schiefelbein.Utilities.SystemManager.Client" Version="8.0.0.6" />
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.2" />
     <PackageReference Include="Serilog.Extensions.Logging.File" Version="3.0.0" />
   </ItemGroup>

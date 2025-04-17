@@ -235,12 +235,25 @@
     }
 
     function initDiskData(chart, diskData) {
+        let isReady = diskData.isReady;
         let freeSpace = diskData.freeSpace[diskData.freeSpace.length - 1];
         let total = diskData.totalSize;
         let usedSpace = total - freeSpace;
         var name = diskData.name;
         var driveFormat = diskData.driveFormat;
         var driveType = diskData.driveType;
+
+        if (!isReady) {
+            chart.options.plugins.title.text = name + " (" + driveType + ")";
+            chart.data.datasets.forEach((dataset) => {
+                dataset.data = [100]
+                dataset.backgroundColor = ['rgb(200, 200, 200)'];
+            });
+
+            chart.update();
+            return;
+        }
+
         if (driveType !== undefined && driveType != null) {
             if (driveType == "Fixed") {
                 chart.options.plugins.title.text = name + " " + driveFormat;
@@ -269,6 +282,10 @@
     }
 
     function printBytes(bytes) {
+        if (bytes == 100) {
+            return "device not ready";
+        }
+
         let MB = 1024.0 * 1024.0;
         let GB = MB * 1024.0;
         let TB = GB * 1024.0;
@@ -282,13 +299,7 @@
     }
 
     function addDiskData(chart, diskData) {
-        let freeSpace = diskData.freeSpace[diskData.freeSpace.length - 1];
-        let total = diskData.totalSize;
-        let usedSpace = total - freeSpace;
-        chart.data.datasets.forEach((dataset) => {
-            dataset.data = [ usedSpace, freeSpace ];
-        });
-        chart.update();
+        initDiskData(chart, diskData);
     }
 
     var obj = {
